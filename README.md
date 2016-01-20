@@ -1,5 +1,13 @@
 # A Sample Docker workflow leveraging machine, swarm, compose and NGiNX with GeoIP module  for CDS GPN Cloud!
 
+## 团队介绍
+
+团队名称：FullOfWater
+
+团队人员：崔嵬(cuiwei13@pku.edu.cn)， 王虎(doyle@pku.edu.cn)
+
+团队负责人： 王虎(doyle@pku.edu.cn)
+
 
 ## 动机： CDS GPN云需要一个更完整的软件栈
 CDS GPN云将全球各地多个数据中心使用高速专用网络连接起来，每个用户都可以创建一个跨多地数据中心的私有网络。这为期望打开国际市场的中国IT公司提供了一个非常合适的公有云计算平台。
