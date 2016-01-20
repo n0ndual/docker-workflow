@@ -67,7 +67,7 @@ step2:  运行
 
 切换到docker swarm-master machine 上
 ```
-eval $(docker-machine env -swarm swamr-master)
+eval $(docker-machine env swamr-master)
 ```
 
 运行docker-compose
