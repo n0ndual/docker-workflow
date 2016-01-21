@@ -2,7 +2,7 @@
 FROM ubuntu
 
 # File Author / Maintainer
-MAINTAINER scorpionis
+MAINTAINER Anand Mani Sankar
 
 # Install Nginx
 
@@ -30,5 +30,6 @@ RUN echo "daemon off;" >> /etc/nginx/nginx.conf
 # Expose ports
 EXPOSE 80
 
+ADD start.sh /start.sh
 # Set the default command to execute when creating a new container
-CMD service nginx start
+CMD ["/start.sh"]

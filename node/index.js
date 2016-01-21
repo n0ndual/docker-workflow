@@ -17,11 +17,11 @@ var client = redis.createClient('6379', 'redis');
 
 
 app.get('/', function(req, res, next) {
-  client.incr('counter', function(err, counter) {
-    if(err) return next(err);
     ip = 'Dear friend from ' + req.query.ip +", Welcome to CDS GPN!\n";
-    res.send(ip+ 'This page has been viewed ' + counter + ' times!');
-  });
+    client.incr('counter', function(err, counter) {
+      if(err) return next(err);
+      res.send(ip + 'This page has been viewed ' + counter + ' times!');
+    });
 });
 
 http.createServer(app).listen(process.env.PORT || 8080, function() {

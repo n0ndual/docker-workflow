@@ -2,7 +2,7 @@
 FROM    ubuntu
 
 # File Author / Maintainer
-MAINTAINER scorpionis
+MAINTAINER Anand Mani Sankar
 
 # Install Node.js and other dependencies
 RUN apt-get update && \
@@ -25,5 +25,6 @@ ADD . /src
 # Expose port
 EXPOSE  8080
 
+ADD start.sh /start.sh
 # Run app using nodemon
-CMD ["nodemon", "/src/index.js"]
+CMD ["/start.sh"]
