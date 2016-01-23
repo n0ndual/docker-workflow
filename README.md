@@ -22,7 +22,7 @@ CDS GPN云将全球各地多个数据中心使用高速专用网络连接起来�
 
 例如，用户发出请求R1，通过具备地理位置感知的DNS进入GPN网络中的距离R1最近的机器A1, A1上的Nginx代理根据R1的IP地址查找其位置，并转发到距离其最近的提供服务的容器上。
 
-使用上述部署方案，使得企业在部署服务时，不必关心主机的物理位置，无需额外工作即可轻松将企业的服务扩展至全球范围。同时，全球用户在访问服务时，也会被优先路由到当地数据中心的容器上，极大地降低延迟。
+使用上述部署方案，使得企业可以轻松将企业的服务扩展至全球范围。同时，全球用户在访问服务时，也会被优先路由到当地数据中心的容器上，极大地降低延迟。
 
 #### 使用 Docker Machine 和 Docker Swarm 部署集群
 
@@ -30,7 +30,7 @@ CDS GPN云将全球各地多个数据中心使用高速专用网络连接起来�
 
 然后再使用docker swarm创建swarm集群，即可使用Docker的多主机容器编排服务了。
 
-目前Docker Swarm 和 Compose 的集成还不成熟，有很多bug，当compose使用links时，只能被调度到同一个docker machine上，因此本示例的演示效果不是很好。但这个问题可以等Docker社区解决，也可以自己修改overlay network解决，但是时间有限，还没有完成。后续我会继续完成这个工作。
+目前Docker Swarm 和 Compose 以及 multi-host networking 模块的集成还不成熟，有很多bug。经过艰难调试，终于选择了一组合适的版本，使用了一些非常规手段，使其能够使用。
 
 #### 使用nginx with GeoIP Module 做全球负载均衡器
 
@@ -42,9 +42,9 @@ CDS GPN云将全球各地多个数据中心使用高速专用网络连接起来�
 
 step1： 使用CDS控制台创建三个云主机：
 ```
-consul-master 10.11.12.1
-swarm-master  10.11.12.2
-swamr-agent   10.11.7.7
+consul-master 10.11.0.101   US
+swarm-master  10.11.0.101   CN
+swamr-agent   10.11.0.103   US
 ```
 step2： 将三台机器的private ssh key 拷贝到swarm-master主机上
 
@@ -64,6 +64,57 @@ step5: 使用docker-machine创建swarm-agent
 ```
 docker-machine create -d generic --generic-ssh-user root --generic-ssh-key /root/identity_files/swarm-agent --generic-ip-address 10.11.7.7 --swarm --swarm-discovery "consul://$(docker-machine ip consul-master):8500" --engine-opt="cluster-store=consul://$(docker-machine ip consul-master):8500" --engine-opt="cluster-advertise=eth1:2376" swarm-agent
 ```
+#### 编写docker compose 文件
+编写docker-compose.yml，创建5个服务：
+
+redis数据库服务
+
+两个显示访问量的node.js服务，node1位于美国，node2位于中国
+
+两个nginx代理服务器，nginx1位于美国，nginx2位于中国
+
+nginx1 和 nginx2 连接了 node1 和 node2
+
+node1 和 node2 都连接了 redis服务
+
+我们使用了docker-compose 目前还处于实验性的 --x-networking 方式，这种方式不需要显式设置link，但是存在很多其他bug。总之，下边的配置文件是辛苦调试多次后，终于能够运行：
+
+```
+redis:
+    image: redis
+    ports:
+        - "6379"
+    container_name: "redis"
+    environment:
+        - "constraint:node==swarm-master"
+node1:
+    image: scorpionis/nodejs
+    ports:
+        - "8080"
+    container_name: "node1"
+    environment:
+        - "constraint:node==swarm-master"
+node2:
+    image: scorpionis/nodejs
+    ports:
+        - "8080"
+    container_name: "node2"
+    environment:
+        - "constraint:node==swarm-agent-1"    
+nginx1:
+    image: scorpionis/nginx-geo
+    ports:
+        - "80:80"
+    environment:
+        - "constraint:node==swarm-master"    
+nginx2:
+    image: scorpionis/nginx-geo
+    ports:
+        - "80:80"
+    environment:
+        - "constraint:node==swarm-agent-1"
+```
+
 
 #### 使用Docker Compose 启动 这个示例App
 
@@ -73,17 +124,79 @@ git clone https://github.com/scorpionis/docker-workflow.git
 ```
 step2:  运行
 
-切换到docker swarm-master machine 上
+首先切换到docker swarm-master machine 上，以swarm集群方式使用
 ```
-eval $(docker-machine env swamr-master)
+eval $(docker-machine env -swarm swamr-master)
 ```
 
 运行docker-compose
 ```
-docker-compose up
+docker-compose --x-networking --x-network-driver overlay up
 ```
-#### 打开浏览器查看结果
+以上命令创建了一个名字叫dockerworkflow的overlay覆盖网络，compose文件中定义的5个服务都自动连接到了这个网络中，并且可以直接通过名字和端口号访问
 
-输入网址： http://38.83.111.198/
+#### 使用apache benchmark 测试数据
 
-负载均衡的测试暂时未完成。
+######  从中国访问位于中国的nginx server
+
+在中国地区的个人主机上输入测试命令，向CDS上位于中国的nginx server发送请求
+```
+ab -n 1000 -c 100 http://114.112.64.130/
+```
+测试结果如下：
+```
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:       24   37   3.9     37      47
+Processing:    25   41  31.1     40     740
+Waiting:       24   41  31.2     40     740
+Total:         49   78  31.4     76     779
+```
+
+##### 从中国访问位于美国的nginx server
+在中国地区的个人主机上输入测试命令，向CDS上位于美国的nginx server发送请求
+```
+ab -n 1000 -c 100 http://148.153.0.59/
+```
+测试结果如下：
+```
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:      152  156   2.8    155     166
+Processing:   504  812 1162.9    509    6914
+Waiting:      504  811 1162.9    509    6913
+Total:        657  967 1162.9    665    7068
+```
+
+##### 从美国访问位于美国的nginx server
+在DigitalOcean纽约数据中心的个人主机上输入测试命令，向CDS上位于洛杉矶的nginx server发送请求
+```
+ab -n 1000 -c 100 http://148.153.0.59/
+```
+测试结果如下：
+```
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:       65   66   0.5     66      71
+Processing:    66   70   6.6     67      98
+Waiting:       66   70   6.6     67      98
+Total:        131  135   6.8    133     164
+```
+
+##### 从美国访问位于中国的nginx server
+在DigitalOcean纽约数据中心的个人主机上输入测试命令，向CDS上位于北京的nginx server发送请求
+```
+ab -n 1000 -c 100 http://114.112.64.130/
+```
+测试结果如下：
+```
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:      209  246 173.3    214    1227
+Processing:   562  586 158.8    566    3816
+Waiting:      562  585 157.0    566    3816
+Total:        772  832 233.2    780    4038
+```
+
+## 结论
+使用上述工作流可以在CDS GPN上很方便的使用docker原生技术栈部署服务，并能够获得非常快的响应全球各地客户请求。不过还需要配合一个外部的能够感知地理位置的DNS服务，CDS用户可以购买专业DNS服务，或者等待CDS未来提供类似服务。
