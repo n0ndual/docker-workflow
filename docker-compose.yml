@@ -1,10 +1,15 @@
-redis:
-    image: redis
+nginx1:
+    image: scorpionis/nginx-geo
     ports:
-        - "6379"
-    container_name: "redis"
+        - "80:80"
     environment:
-        - "constraint:node==swarm-master"
+        - "constraint:node==swarm-master"    
+nginx2:
+    image: scorpionis/nginx-geo
+    ports:
+        - "80:80"
+    environment:
+        - "constraint:node==swarm-agent-1"
 node1:
     image: scorpionis/nodejs
     ports:
@@ -18,16 +23,19 @@ node2:
         - "8080"
     container_name: "node2"
     environment:
-        - "constraint:node==swarm-agent-1"    
-nginx1:
-    image: scorpionis/nginx-geo
+        - "constraint:node==swarm-agent-1"
+redis1:
+    image: redis
     ports:
-        - "80:80"
+        - "6379"
+    container_name: "redis1"
     environment:
-        - "constraint:node==swarm-master"    
-nginx2:
-    image: scorpionis/nginx-geo
+        - "constraint:node==swarm-master"
+redis2:
+    image: redis
     ports:
-        - "80:80"
+        - "6379"
+    container_name: "redis2"
     environment:
         - "constraint:node==swarm-agent-1"
+
